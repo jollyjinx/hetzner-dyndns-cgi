@@ -33,10 +33,17 @@ struct DynDNSHandler: Sendable {
         let ipAddress = params["myip"] ?? params["ip"] ?? cgiEnv.remoteAddr
         
         // Validate IP address
-        guard !ipAddress.isEmpty, isValidIP(ipAddress) else {
+        guard !ipAddress.isEmpty else {
             return CGIResponse(
                 status: .badRequest,
-                body: "dnserr - Invalid IP address: '\(ipAddress)'"
+                body: "dnserr - No IP address provided (myip parameter missing and REMOTE_ADDR not available)"
+            )
+        }
+        
+        guard isValidIP(ipAddress) else {
+            return CGIResponse(
+                status: .badRequest,
+                body: "dnserr - Invalid IP address format: '\(ipAddress)'"
             )
         }
         

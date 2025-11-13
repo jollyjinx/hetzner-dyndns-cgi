@@ -1,6 +1,6 @@
 # hetzner-dyndns-cgi
 
-A Swift 6 CGI binary that provides a DynDNS-compatible interface for updating Hetzner DNS records. This allows you to use consumer routers with DynDNS support to automatically update your Hetzner DNS records.
+A CGI binary that provides a DynDNS-compatible interface for updating Hetzner DNS records. This allows you to use consumer routers with DynDNS support to automatically update your Hetzner DNS records.
 
 ## Features
 
@@ -17,67 +17,38 @@ The CGI binary accepts HTTP requests with Basic Authentication where:
 - **Password** = Your Hetzner API Token
 
 Query parameters:
-- `hostname` (or `host`, `domain`) - The DNS record to update (e.g., `home.example.com`)
+- `hostname` (or `host`, `domain`) - The DNS record to update (e.g., `mydynhost`)
 - `myip` (or `ip`) - Optional IP address (defaults to the client's remote address)
 
-## Building
-
-### Option 1: Using Docker (Recommended for Linux binary)
-
-```bash
-./build-linux-static.sh
-```
-
-This will create a static Linux binary at `.build/release/hetzner-dyndns`
-
-### Option 2: Using Docker Compose
-
-```bash
-docker build -t hetzner-dyndns .
-docker run --rm -v $(pwd):/output hetzner-dyndns sh -c "cp /usr/local/bin/hetzner-dyndns /output/"
-```
-
-### Option 3: Native Build (macOS/Linux)
-
-```bash
-swift build -c release --static-swift-stdlib
-```
-
-Note: Native builds may not be fully static and might require runtime dependencies.
 
 ## Deployment
 
-1. **Build the binary** using one of the methods above
-
-2. **Upload to your web server's CGI directory**:
+1. **Upload to your web server's CGI directory**:
+   Either build the binary from source or use one of the provided binaries (amd64 or arm64) and copy them to the cgi-bin of your webserver.
    ```bash
-   scp .build/release/hetzner-dyndns user@yourserver.com:/var/www/cgi-bin/dyndns
+   scp .build/release/hetzner-dyndns.amd64 user@yourserver.com:/var/www/cgi-bin/dyndns.cgi
    ```
 
-3. **Set permissions**:
-   ```bash
-   ssh user@yourserver.com
-   chmod +x /var/www/cgi-bin/dyndns
+1. **Upload the .htaccess file** (IMPORTANT - required for authentication):
+   You need to change the .htaccess file so that the binary does get the authentication headers. 
+   The `.htaccess` file captures the HTTP Authorization header and makes it available to the CGI script. Without it, authentication will fail.
+   
+   An example is provided:
+      ```bash
+   scp htaccess user@yourserver.com:/var/www/.htaccess
    ```
-
-4. **Configure your web server** (Apache example):
-   ```apache
-   ScriptAlias /dyndns /var/www/cgi-bin/dyndns
-   <Directory "/var/www/cgi-bin">
-       Options +ExecCGI
-       SetHandler cgi-script
-   </Directory>
-   ```
+    
+For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ## Router Configuration
 
-Configure your router's DynDNS settings with:
+Configure your router's DynDNS settings - for UniFi I'm using
 
-- **Service**: Custom or Generic DynDNS
-- **Server**: `yourserver.com`
-- **URL/Path**: `/dgi-bin/dyndns?hostname=<domain>&myip=<ipaddr>`
+- **Service**: Custom
+- **Hostname**: `mydynhost`
 - **Username**: Your Hetzner Zone ID (e.g., `abc123def456`)
 - **Password**: Your Hetzner API Token
+- **URL/Path**: `www.yourserver.com/dyndns?hostname=%h&myip=%i`
 
 ### Getting Your Hetzner Credentials
 
@@ -124,6 +95,33 @@ The CGI follows standard DynDNS response codes:
 | `nohost` | Hostname not found in your DNS zone |
 | `dnserr` | Invalid IP address format |
 | `911` | Server error (check Hetzner API status) |
+
+
+## Building from Source
+
+### Option 1: Using Docker (Recommended for Linux binary)
+
+```bash
+./build-linux-static.sh
+```
+
+This will create a static Linux binary at `.build/release/hetzner-dyndns`
+
+### Option 2: Using Docker Compose
+
+```bash
+docker build -t hetzner-dyndns .
+docker run --rm -v $(pwd):/output hetzner-dyndns sh -c "cp /usr/local/bin/hetzner-dyndns /output/"
+```
+
+### Option 3: Native Build (macOS/Linux)
+
+```bash
+swift build -c release --static-swift-stdlib
+```
+
+Note: Native builds may not be fully static and might require runtime dependencies.
+
 
 ## Testing
 
@@ -182,7 +180,7 @@ good 1.2.3.4
 
 ## License
 
-See [LICENSE](LICENSE) file for details.
+MIT - See [LICENSE](LICENSE) file for details.
 
 ## Contributing
 

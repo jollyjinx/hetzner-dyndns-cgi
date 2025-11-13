@@ -33,16 +33,33 @@ struct CGIEnvironment: Sendable {
     
     /// Extract Basic Auth credentials from environment
     func getBasicAuth() -> (username: String, password: String)? {
-        guard let authHeader = ProcessInfo.processInfo.environment["HTTP_AUTHORIZATION"] else {
+        // Apache can set the Authorization header in different environment variables
+        // depending on configuration. Check all possible locations.
+        let possibleAuthVars = [
+            "HTTP_AUTHORIZATION",           // Standard CGI variable
+            "REDIRECT_HTTP_AUTHORIZATION",  // When using mod_rewrite
+            "Authorization",                // Some configurations
+            "REDIRECT_Authorization"        // Rewrite variant
+        ]
+        
+        var authHeader: String? = nil
+        for varName in possibleAuthVars {
+            if let value = ProcessInfo.processInfo.environment[varName] {
+                authHeader = value
+                break
+            }
+        }
+        
+        guard let authHeader = authHeader else {
             return nil
         }
         
         // Format: "Basic base64(username:password)"
         let components = authHeader.split(separator: " ", maxSplits: 1)
         guard components.count == 2,
-              components[0].lowercased() == "basic",
-              let decoded = Data(base64Encoded: String(components[1])),
-              let credentials = String(data: decoded, encoding: .utf8) else {
+            components[0].lowercased() == "basic",
+            let decoded = Data(base64Encoded: String(components[1])),
+            let credentials = String(data: decoded, encoding: .utf8) else {
             return nil
         }
         
