@@ -11,7 +11,7 @@ struct DynDNSHandler: Sendable {
         guard let auth = cgiEnv.getBasicAuth() else {
             return CGIResponse(
                 status: .unauthorized,
-                body: "badauth"
+                body: "badauth - Missing or invalid Basic Authentication header"
             )
         }
         
@@ -25,7 +25,7 @@ struct DynDNSHandler: Sendable {
         guard let hostname = params["hostname"] ?? params["host"] ?? params["domain"] else {
             return CGIResponse(
                 status: .badRequest,
-                body: "notfqdn"
+                body: "notfqdn - Missing hostname parameter (use: hostname, host, or domain)"
             )
         }
         
@@ -36,14 +36,14 @@ struct DynDNSHandler: Sendable {
         guard !ipAddress.isEmpty, isValidIP(ipAddress) else {
             return CGIResponse(
                 status: .badRequest,
-                body: "dnserr"
+                body: "dnserr - Invalid IP address: '\(ipAddress)'"
             )
         }
         
         // Update DNS record
+        let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
+        
         do {
-            let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
-            
             let apiClient = HetznerAPIClient(apiToken: apiToken, httpClient: httpClient)
             
             // Get all records for the zone
@@ -56,14 +56,20 @@ struct DynDNSHandler: Sendable {
             guard let record = records.first(where: { 
                 $0.name == hostname && $0.type == recordType 
             }) else {
+                // Cleanup before returning
+                try? await httpClient.shutdown()
+                
+                // Provide helpful debug info about available records
+                let availableRecords = records.map { "\($0.name) (\($0.type))" }.joined(separator: ", ")
                 return CGIResponse(
                     status: .notFound,
-                    body: "nohost"
+                    body: "nohost - \(hostname) (\(recordType)) not found in zone. Available: [\(availableRecords)]"
                 )
             }
             
             // Check if update is needed
             if record.value == ipAddress {
+                try? await httpClient.shutdown()
                 return CGIResponse(
                     status: .ok,
                     body: "nochg \(ipAddress)"
@@ -88,10 +94,43 @@ struct DynDNSHandler: Sendable {
                 body: "good \(ipAddress)"
             )
             
+        } catch let error as HetznerAPIError {
+            // Handle Hetzner API specific errors
+            switch error {
+            case .httpError(let statusCode):
+                if statusCode == 401 || statusCode == 403 {
+                    return CGIResponse(
+                        status: .unauthorized,
+                        body: "badauth - API authentication failed (HTTP \(statusCode))"
+                    )
+                } else if statusCode == 404 {
+                    return CGIResponse(
+                        status: .notFound,
+                        body: "nohost - Zone or record not found (HTTP \(statusCode))"
+                    )
+                } else {
+                    return CGIResponse(
+                        status: .internalServerError,
+                        body: "911 - Hetzner API error (HTTP \(statusCode))"
+                    )
+                }
+            case .recordNotFound:
+                return CGIResponse(
+                    status: .notFound,
+                    body: "nohost - DNS record not found in zone"
+                )
+            case .invalidResponse:
+                return CGIResponse(
+                    status: .internalServerError,
+                    body: "911 - Invalid API response format"
+                )
+            }
         } catch {
+            // Generic error with details
+            try? await httpClient.shutdown()
             return CGIResponse(
                 status: .internalServerError,
-                body: "911"
+                body: "911 - Error: \(error.localizedDescription)"
             )
         }
     }

@@ -1,4 +1,4 @@
-FROM swift:6.0-jammy as builder
+FROM --platform=linux/amd64 swift:6.0-jammy as builder
 
 WORKDIR /build
 
@@ -13,7 +13,7 @@ RUN swift build -c release --static-swift-stdlib
 RUN strip .build/release/hetzner-dyndns
 
 # Create minimal runtime image
-FROM ubuntu:22.04
+FROM --platform=linux/amd64 ubuntu:22.04
 
 # Install only essential runtime dependencies
 RUN apt-get update && \
