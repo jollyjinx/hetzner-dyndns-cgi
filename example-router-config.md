@@ -8,7 +8,7 @@ This document provides example configurations for popular routers.
 2. Select: **Custom**
 3. Configure:
    - **Update URL**: `https://yourserver.com/cgi-bin/dyndns?hostname=<domain>&myip=<ipaddr>`
-   - **Domain Name**: `home.example.com`
+   - **Domain Name**: `mydynhost`
    - **Username**: Your Hetzner Zone ID
    - **Password**: Your Hetzner API Token
 
@@ -18,7 +18,7 @@ This document provides example configurations for popular routers.
 2. Select: **Custom**
 3. Configure:
    - **Service**: custom
-   - **Hostname**: `home.example.com`
+   - **Hostname**: `mydynhost`
    - **Username**: Your Hetzner Zone ID
    - **Password**: Your Hetzner API Token
    - **Server**: `yourserver.com/cgi-bin/dyndns?hostname=%h&myip=%i`
@@ -29,7 +29,7 @@ This document provides example configurations for popular routers.
 2. Click **Add**
 3. Configure:
    - **Service Type**: Custom
-   - **Hostname**: `home.example.com`
+   - **Hostname**: `mydynhost`
    - **Username**: Your Hetzner Zone ID
    - **Password**: Your Hetzner API Token
    - **Update URL**: `https://yourserver.com/cgi-bin/dyndns?hostname=%HOSTNAME%&myip=%IP%`
@@ -42,8 +42,8 @@ This document provides example configurations for popular routers.
    - **DYNDNS Server**: `yourserver.com`
    - **Username**: Your Hetzner Zone ID
    - **Password**: Your Hetzner API Token
-   - **Hostname**: `home.example.com`
-   - **URL**: `/cgi-bin/dyndns?hostname=home.example.com&myip=`
+   - **Hostname**: `mydynhost`
+   - **URL**: `/cgi-bin/dyndns?hostname=mydynhost&myip=`
 
 ## OpenWrt
 
@@ -58,7 +58,7 @@ This document provides example configurations for popular routers.
    config service 'hetzner'
        option enabled '1'
        option service_name 'custom'
-       option domain 'home.example.com'
+       option domain 'mydynhost'
        option username 'YOUR_ZONE_ID'
        option password 'YOUR_API_TOKEN'
        option update_url 'https://yourserver.com/cgi-bin/dyndns?hostname=[DOMAIN]&myip=[IP]'
@@ -76,7 +76,7 @@ This document provides example configurations for popular routers.
 /system script add name=dyndns-update source={
   :local username "YOUR_ZONE_ID"
   :local password "YOUR_API_TOKEN"
-  :local hostname "home.example.com"
+  :local hostname "mydynhost"
   :local url "https://yourserver.com/cgi-bin/dyndns"
   
   :local ip [/ip address get [find interface=ether1] address]
@@ -95,7 +95,7 @@ This document provides example configurations for popular routers.
 2. Select: **Custom**
 3. Configure:
    - **Service Provider**: Custom
-   - **Domain**: `home.example.com`
+   - **Domain**: `mydynhost`
    - **Username**: Your Hetzner Zone ID
    - **Password**: Your Hetzner API Token
    - **Server Address**: `yourserver.com/cgi-bin/dyndns?hostname=<domain>&myip=<ipaddr>`
@@ -105,7 +105,7 @@ This document provides example configurations for popular routers.
 1. Navigate to: **WAN → DDNS**
 2. Configure:
    - **Server**: Custom
-   - **Host Name**: `home.example.com`
+   - **Host Name**: `mydynhost`
    - **Username**: Your Hetzner Zone ID
    - **Password**: Your Hetzner API Token
    - **URL**: `https://yourserver.com/cgi-bin/dyndns?hostname=<domain>&myip=<ipaddr>`
@@ -116,7 +116,7 @@ This document provides example configurations for popular routers.
 2. Select: **Use a Dynamic DNS Service**
 3. Configure:
    - **Service Provider**: Custom
-   - **Host Name**: `home.example.com`
+   - **Host Name**: `mydynhost`
    - **Username**: Your Hetzner Zone ID
    - **Password**: Your Hetzner API Token
 
@@ -129,7 +129,7 @@ After configuring your router, you can verify it's working by:
 1. Check your router's DynDNS status page
 2. Use curl to verify the DNS record:
    ```bash
-   dig home.example.com
+   dig mydynhost.example.com
    ```
 3. Check your web server's access logs for incoming requests
 

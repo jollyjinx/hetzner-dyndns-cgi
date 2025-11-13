@@ -1,0 +1,10 @@
+RewriteEngine On
+# Capture Authorization header and make it available to CGI
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Alternative: Set it as REDIRECT_HTTP_AUTHORIZATION as well
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule .* - [E=REDIRECT_HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+RewriteRule ^dyndns\/?$ cgi-bin/dyndns.cgi [L]
