@@ -1,9 +1,6 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-
-# Clean previous build if it exists
-# rm -rf .build
 
 # Get current user ID and group ID for fixing permissions
 USER_ID=$(id -u)
@@ -16,15 +13,19 @@ do
 echo "Building static Linux binary for hetzner-dyndns architecture: $architecture"
 
 binaryname="hetzner-dyndns.$architecture"
+scratchdir="/tmp/hetzner-dyndns-build-$architecture"
 
-docker run --rm \
+container system start
+container run --rm \
   --platform linux/$architecture \
   -v "$(pwd):/workspace" \
   -w /workspace \
-  swift:6.0-jammy \
-  bash -c "swift build -c release --static-swift-stdlib && \
-           strip .build/release/hetzner-dyndns && \
-           cp .build/release/hetzner-dyndns $binaryname"
+  swift:6.2.1-jammy \
+  bash -lc "rm -rf '$scratchdir' && \
+            swift build -c release --static-swift-stdlib --jobs 1 --scratch-path '$scratchdir' && \
+            strip '$scratchdir/release/hetzner-dyndns' && \
+            cp '$scratchdir/release/hetzner-dyndns' '$binaryname' && \
+            rm -rf '$scratchdir'"
 
     echo ""
     echo "Binary size: $(du -h "$binaryname" | cut -f1)"
@@ -34,7 +35,4 @@ docker run --rm \
     echo ""
     echo "To deploy, copy this binary to your web server's cgi-bin directory."
 done
-
-
-
 

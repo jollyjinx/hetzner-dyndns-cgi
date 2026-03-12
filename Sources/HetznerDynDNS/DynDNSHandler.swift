@@ -2,8 +2,15 @@
 //  DynDNSHandler.swift
 //
 
-import AsyncHTTPClient
 import Foundation
+
+@inline(__always)
+private func trace(_ message: String)
+{
+    guard ProcessInfo.processInfo.environment["DYNDNS_TRACE"] == "1" else { return }
+    guard let data = "[dyndns] \(message)\n".data(using: .utf8) else { return }
+    try? FileHandle.standardError.write(contentsOf: data)
+}
 
 /// Handles DynDNS update requests
 struct DynDNSHandler: Sendable
@@ -13,7 +20,6 @@ struct DynDNSHandler: Sendable
     /// Process the DynDNS update request
     func handleRequest() async -> CGIResponse
     {
-        // Extract authentication (zoneId as username, API token as password)
         guard let auth = cgiEnv.getBasicAuth()
         else
         {
@@ -21,24 +27,20 @@ struct DynDNSHandler: Sendable
                                body: "badauth - Missing or invalid Basic Authentication header")
         }
 
-        let zoneId = auth.username
+        let zoneIdentifier = auth.username
         let apiToken = auth.password
-
-        // Parse query parameters
         let params = cgiEnv.parseQueryParameters()
 
-        // Get hostname to update (common DynDNS parameter names)
-        guard let hostname = params["hostname"] ?? params["host"] ?? params["domain"]
+        guard let rawHostname = params["hostname"] ?? params["host"] ?? params["domain"],
+              !rawHostname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else
         {
             return CGIResponse(status: .badRequest,
                                body: "notfqdn - Missing hostname parameter (use: hostname, host, or domain)")
         }
 
-        // Get IP address (myip parameter or use remote address)
         let ipAddress = params["myip"] ?? params["ip"] ?? cgiEnv.remoteAddr
 
-        // Validate IP address
         guard !ipAddress.isEmpty
         else
         {
@@ -53,106 +55,157 @@ struct DynDNSHandler: Sendable
                                body: "dnserr - Invalid IP address format: '\(ipAddress)'")
         }
 
-        // Update DNS record
-        let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
+        let apiClient = HetznerAPIClient(apiToken: apiToken)
+        let recordType = ipAddress.contains(":") ? "AAAA" : "A"
 
+        let response: CGIResponse
         do
         {
-            let apiClient = HetznerAPIClient(apiToken: apiToken, httpClient: httpClient)
+            trace("getZone start zone=\(zoneIdentifier)")
+            let zone = try await apiClient.getZone(idOrName: zoneIdentifier)
+            trace("getZone ok zoneName=\(zone.name)")
+            let rrsetName = Self.resolveRRSetName(hostname: rawHostname, zoneName: zone.name)
 
-            // Get all records for the zone
-            let records = try await apiClient.getRecords(zoneId: zoneId)
-
-            // Determine record type based on IP version
-            let recordType = ipAddress.contains(":") ? "AAAA" : "A"
-
-            // Find the record to update
-            guard let record = records.first(where: {
-                $0.name == hostname && $0.type == recordType
-            })
+            guard !rrsetName.isEmpty
             else
             {
-                // Cleanup before returning
-                try? await httpClient.shutdown()
-
-                // Provide helpful debug info about available records
-                let availableRecords = records.map { "\($0.name) (\($0.type))" }.joined(separator: ", ")
-                return CGIResponse(status: .notFound,
-                                   body: "nohost - \(hostname) (\(recordType)) not found in zone. Available: [\(availableRecords)]")
+                response = CGIResponse(status: .badRequest,
+                                       body: "notfqdn - Invalid hostname: '\(rawHostname)'")
+                return response
             }
 
-            // Check if update is needed
-            if record.value == ipAddress
+            let rrset = try await apiClient.getRRSet(zoneIdOrName: zoneIdentifier,
+                                                     name: rrsetName,
+                                                     type: recordType)
+            trace("getRRSet complete name=\(rrsetName) type=\(recordType) found=\(rrset != nil)")
+
+            if let rrset
             {
-                try? await httpClient.shutdown()
-                return CGIResponse(status: .ok,
-                                   body: "nochg \(ipAddress)")
+                if rrset.records.count == 1, rrset.records[0].value == ipAddress
+                {
+                    trace("rrset unchanged value=\(ipAddress)")
+                    response = CGIResponse(status: .ok,
+                                           body: "nochg \(ipAddress)")
+                }
+                else
+                {
+                    let preservedComment = rrset.records.first?.comment
+                    let desiredRecords = [DNSRRSetRecord(value: ipAddress,
+                                                         comment: preservedComment)]
+
+                    trace("setRRSetRecords start target=\(ipAddress)")
+                    try await apiClient.setRRSetRecords(zoneIdOrName: zoneIdentifier,
+                                                       name: rrsetName,
+                                                       type: recordType,
+                                                       records: desiredRecords)
+                    trace("setRRSetRecords ok target=\(ipAddress)")
+
+                    response = CGIResponse(status: .ok,
+                                           body: "good \(ipAddress)")
+                }
             }
-
-            // Update the record
-            try await apiClient.updateRecord(recordId: record.id,
-                                             name: hostname,
-                                             type: recordType,
-                                             value: ipAddress,
-                                             ttl: 60,
-                                             zoneId: zoneId)
-
-            // Cleanup HTTP client
-            try? await httpClient.shutdown()
-
-            return CGIResponse(status: .ok,
-                               body: "good \(ipAddress)")
+            else
+            {
+                response = CGIResponse(status: .notFound,
+                                       body: "nohost - \(rawHostname) (\(recordType)) not found in zone \(zone.name)")
+            }
         }
         catch let error as HetznerAPIError
         {
-            // Handle Hetzner API specific errors
+            trace("HetznerAPIError \(String(describing: error))")
             switch error
             {
-                case let .httpError(statusCode):
+                case let .httpError(statusCode, message):
                     if statusCode == 401 || statusCode == 403
                     {
-                        return CGIResponse(status: .unauthorized,
-                                           body: "badauth - API authentication failed (HTTP \(statusCode))")
+                        response = CGIResponse(status: .unauthorized,
+                                               body: "badauth - API authentication failed (HTTP \(statusCode))")
                     }
                     else if statusCode == 404
                     {
-                        return CGIResponse(status: .notFound,
-                                           body: "nohost - Zone or record not found (HTTP \(statusCode))")
+                        response = CGIResponse(status: .notFound,
+                                               body: "nohost - Zone or record not found (HTTP \(statusCode))")
                     }
                     else
                     {
-                        return CGIResponse(status: .internalServerError,
-                                           body: "911 - Hetzner API error (HTTP \(statusCode))")
+                        let detailSuffix = message.map { ": \($0)" } ?? ""
+                        response = CGIResponse(status: .internalServerError,
+                                               body: "911 - Hetzner API error (HTTP \(statusCode)\(detailSuffix))")
                     }
                 case .recordNotFound:
-                    return CGIResponse(status: .notFound,
-                                       body: "nohost - DNS record not found in zone")
+                    response = CGIResponse(status: .notFound,
+                                           body: "nohost - DNS record not found in zone")
+                case let .transportError(message):
+                    response = CGIResponse(status: .internalServerError,
+                                           body: "911 - Transport error: \(message)")
                 case .invalidResponse:
-                    return CGIResponse(status: .internalServerError,
-                                       body: "911 - Invalid API response format")
+                    response = CGIResponse(status: .internalServerError,
+                                           body: "911 - Invalid API response format")
             }
         }
         catch
         {
-            // Generic error with details
-            try? await httpClient.shutdown()
-            return CGIResponse(status: .internalServerError,
-                               body: "911 - Error: \(error.localizedDescription)")
+            trace("generic error \(error.localizedDescription)")
+            response = CGIResponse(status: .internalServerError,
+                                   body: "911 - Error: \(error.localizedDescription)")
         }
+
+        return response
+    }
+
+    static func resolveRRSetName(hostname: String, zoneName: String) -> String
+    {
+        let normalizedHostname = normalizeDNSName(hostname)
+        let normalizedZone = normalizeDNSName(zoneName)
+
+        guard !normalizedHostname.isEmpty
+        else
+        {
+            return ""
+        }
+
+        if normalizedHostname == "@"
+        {
+            return "@"
+        }
+
+        let lowercaseHostname = normalizedHostname.lowercased()
+        let lowercaseZone = normalizedZone.lowercased()
+
+        if !lowercaseZone.isEmpty
+        {
+            if lowercaseHostname == lowercaseZone
+            {
+                return "@"
+            }
+
+            let zoneSuffix = ".\(lowercaseZone)"
+            if lowercaseHostname.hasSuffix(zoneSuffix)
+            {
+                let relativeLength = normalizedHostname.count - zoneSuffix.count
+                let relativeName = String(normalizedHostname.prefix(relativeLength))
+                return relativeName.isEmpty ? "@" : relativeName
+            }
+        }
+
+        return normalizedHostname
+    }
+
+    static func normalizeDNSName(_ value: String) -> String
+    {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
     }
 
     /// Validate IP address format
     private func isValidIP(_ ip: String) -> Bool
     {
-        // Simple validation for IPv4 and IPv6
         if ip.contains(":")
         {
-            // IPv6 - basic check
             return ip.split(separator: ":").count >= 3
         }
         else
         {
-            // IPv4
             let octets = ip.split(separator: ".")
             guard octets.count == 4 else { return false }
             return octets.allSatisfy
@@ -168,7 +221,7 @@ struct DynDNSHandler: Sendable
 
 struct CGIResponse: Sendable
 {
-    enum Status: Sendable
+    enum Status: Sendable, Equatable
     {
         case ok
         case badRequest
@@ -206,9 +259,14 @@ struct CGIResponse: Sendable
 
     func write()
     {
-        print("Status: \(status.code) \(status.message)")
+        let emittedStatus: Status = status == .internalServerError ? .ok : status
+        print("Status: \(emittedStatus.code) \(emittedStatus.message)")
         print("Content-Type: text/plain")
         print("Cache-Control: no-cache")
+        if emittedStatus != status
+        {
+            print("X-DynDNS-Status: \(status.code)")
+        }
         print("")
         print(body)
     }

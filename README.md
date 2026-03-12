@@ -2,19 +2,21 @@
 
 A CGI binary that provides a DynDNS-compatible interface for updating Hetzner DNS records. This allows you to use consumer routers with DynDNS support to automatically update your Hetzner DNS records.
 
+The CGI uses the current Hetzner Console DNS API at `https://api.hetzner.cloud/v1`, which replaces the retired `dns.hetzner.com` API.
+
 ## Features
 
 - ✅ **DynDNS Protocol Compatible** - Works with most consumer routers that support DynDNS
-- ✅ **Static Binary** - Single executable with no dependencies
-- ✅ **Hetzner DNS API** - Direct integration with Hetzner's DNS API
+- ✅ **Self-Contained Linux Build** - Ships as a single Linux executable built for `amd64` or `arm64`
+- ✅ **Hetzner Console DNS API** - Direct integration with the current Hetzner DNS API
 - ✅ **IPv4 & IPv6 Support** - Automatically handles A and AAAA records
 - ✅ **Standard Responses** - Returns standard DynDNS response codes
 
 ## How It Works
 
 The CGI binary accepts HTTP requests with Basic Authentication where:
-- **Username** = Your Hetzner DNS Zone ID
-- **Password** = Your Hetzner API Token
+- **Username** = Your Hetzner DNS zone name or zone ID
+- **Password** = Your Hetzner Console API token
 
 Query parameters:
 - `hostname` (or `host`, `domain`) - The DNS record to update (e.g., `mydynhost`)
@@ -24,9 +26,9 @@ Query parameters:
 ## Deployment
 
 1. **Upload to your web server's CGI directory**:
-   Either build the binary from source or use one of the provided binaries (amd64 or arm64) and copy them to the cgi-bin of your webserver.
+   Either build the binary from source or download the correct release asset (`hetzner-dyndns.amd64` or `hetzner-dyndns.arm64`) from GitHub Releases, then copy it to your web server's `cgi-bin` as `dyndns.cgi`.
    ```bash
-   scp .build/release/hetzner-dyndns.amd64 user@yourserver.com:/var/www/cgi-bin/dyndns.cgi
+   scp hetzner-dyndns.amd64 user@yourserver.com:/var/www/cgi-bin/dyndns.cgi
    ```
 
 1. **Upload the .htaccess file** (IMPORTANT - required for authentication):
@@ -35,7 +37,7 @@ Query parameters:
    
    An example is provided:
       ```bash
-   scp htaccess user@yourserver.com:/var/www/.htaccess
+   scp .htaccess user@yourserver.com:/var/www/.htaccess
    ```
     
 For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md)
@@ -46,20 +48,20 @@ Configure your router's DynDNS settings - for UniFi I'm using
 
 - **Service**: Custom
 - **Hostname**: `mydynhost`
-- **Username**: Your Hetzner Zone ID (e.g., `abc123def456`)
-- **Password**: Your Hetzner API Token
-- **URL/Path**: `www.yourserver.com/dyndns?hostname=%h&myip=%i`
+- **Username**: Your Hetzner zone name (recommended) or zone ID
+- **Password**: Your Hetzner Console API token
+- **URL/Path**: `www.yourserver.com/cgi-bin/dyndns.cgi?hostname=%h&myip=%i`
 
 ### Getting Your Hetzner Credentials
 
-1. **Zone ID**: 
-   - Log into [Hetzner DNS Console](https://dns.hetzner.com/)
-   - Click on your zone
-   - The Zone ID is in the URL: `https://dns.hetzner.com/zone/YOUR_ZONE_ID`
+1. **Zone name or zone ID**:
+   - Log into [Hetzner Console](https://console.hetzner.cloud/)
+   - Open the project that contains your DNS zone
+   - Use the zone name (recommended) or copy the zone ID from the zone details
 
-2. **API Token**:
-   - Go to [API Tokens](https://dns.hetzner.com/settings/api-token)
-   - Create a new token with DNS read/write permissions
+2. **API token**:
+   - Create a project API token in Hetzner Console with DNS read/write permissions
+   - Old tokens from `dns.hetzner.com` do not work with the new API
    - Save the token securely
 
 ### Example Router URLs
@@ -68,17 +70,17 @@ Different routers use different URL formats. Here are common examples:
 
 **Format 1** (Most common):
 ```
-https://yourserver.com/cgi-bin/dyndns?hostname=<domain>&myip=<ipaddr>
+https://yourserver.com/cgi-bin/dyndns.cgi?hostname=<domain>&myip=<ipaddr>
 ```
 
 **Format 2** (Some routers):
 ```
-https://yourserver.com/cgi-bin/dyndns?host=<domain>&ip=<ipaddr>
+https://yourserver.com/cgi-bin/dyndns.cgi?host=<domain>&ip=<ipaddr>
 ```
 
 **Format 3** (Minimal):
 ```
-https://yourserver.com/cgi-bin/dyndns?hostname=home.example.com
+https://yourserver.com/cgi-bin/dyndns.cgi?hostname=home.example.com
 ```
 (IP will be auto-detected from the request)
 
@@ -90,7 +92,7 @@ The CGI follows standard DynDNS response codes:
 |----------|---------|
 | `good 1.2.3.4` | Update successful |
 | `nochg 1.2.3.4` | IP unchanged, no update needed |
-| `badauth` | Invalid credentials (Zone ID or API Token) |
+| `badauth` | Invalid credentials (zone name/ID or API token) |
 | `notfqdn` | Hostname parameter missing or invalid |
 | `nohost` | Hostname not found in your DNS zone |
 | `dnserr` | Invalid IP address format |
@@ -105,7 +107,29 @@ The CGI follows standard DynDNS response codes:
 ./build-linux-static.sh
 ```
 
-This will create a static Linux binary at `.build/release/hetzner-dyndns`
+This creates Linux binaries in the project root:
+
+- `hetzner-dyndns.amd64`
+- `hetzner-dyndns.arm64`
+
+The build script uses `container run` and serializes the Swift build to keep memory use low on smaller build hosts. These generated binaries are ignored by Git and are not committed to the repository.
+
+### GitHub Releases
+
+Pushing a numeric version tag such as `1.0.0` triggers GitHub Actions to run the test suite, build both Linux binaries, and attach them to a GitHub Release for that tag.
+
+```bash
+git tag 1.0.0
+git push origin 1.0.0
+```
+
+Each release publishes:
+
+- `hetzner-dyndns.amd64`
+- `hetzner-dyndns.arm64`
+- `SHA256SUMS`
+
+The repository does not ship compiled binaries in git. Download release assets from GitHub Releases or build them locally when needed.
 
 ### Option 2: Using Docker Compose
 
@@ -120,7 +144,7 @@ docker run --rm -v $(pwd):/output hetzner-dyndns sh -c "cp /usr/local/bin/hetzne
 swift build -c release --static-swift-stdlib
 ```
 
-Note: Native builds may not be fully static and might require runtime dependencies.
+Note: The production deployment flow is the Linux container build above. Native local builds are useful for development only.
 
 
 ## Testing
@@ -129,12 +153,12 @@ You can test the CGI locally or on your server using curl:
 
 ```bash
 # Test with explicit IP
-curl -u "ZONE_ID:API_TOKEN" \
-  "https://yourserver.com/cgi-bin/dyndns?hostname=home.example.com&myip=1.2.3.4"
+curl -u "ZONE_NAME_OR_ID:API_TOKEN" \
+  "https://yourserver.com/cgi-bin/dyndns.cgi?hostname=home.example.com&myip=1.2.3.4"
 
 # Test with auto-detected IP
-curl -u "ZONE_ID:API_TOKEN" \
-  "https://yourserver.com/cgi-bin/dyndns?hostname=home.example.com"
+curl -u "ZONE_NAME_OR_ID:API_TOKEN" \
+  "https://yourserver.com/cgi-bin/dyndns.cgi?hostname=home.example.com"
 ```
 
 Expected response:
@@ -146,6 +170,7 @@ good 1.2.3.4
 
 - Swift 6.0 or later (for building)
 - Docker (for cross-compilation to Linux)
+- A container runtime that provides the `container` CLI used by `build-linux-static.sh`
 - Linux server with CGI support (Apache, nginx with fcgiwrap, etc.)
 - Hetzner DNS account with API access
 
@@ -159,8 +184,8 @@ good 1.2.3.4
 ## Troubleshooting
 
 ### "badauth" response
-- Verify your Zone ID is correct (check Hetzner DNS Console URL)
-- Verify your API Token is valid and has DNS permissions
+- Verify your zone name or zone ID is correct
+- Verify your Hetzner Console API token is valid and has DNS permissions
 - Check that your router is sending Basic Authentication headers
 
 ### "nohost" response
@@ -174,9 +199,14 @@ good 1.2.3.4
 - Check web server error logs for details
 
 ### Binary won't execute
-- Ensure execute permissions: `chmod +x /path/to/dyndns`
+- Ensure execute permissions: `chmod +x /path/to/dyndns.cgi`
 - Check that the binary is Linux-compatible (use Docker build)
 - Verify CGI is enabled in your web server configuration
+
+### Update path returns Apache 500
+- Verify the file deployed to `cgi-bin/dyndns.cgi` is the newly built binary, not an older copy
+- Compare checksums between `hetzner-dyndns.amd64` and the deployed `dyndns.cgi` before syncing
+- If needed, enable `DYNDNS_TRACE=1` when running the binary directly to capture request flow on stderr
 
 ## License
 

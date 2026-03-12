@@ -1,0 +1,117 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.2"
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Run test suite
+        run: swift test
+
+  build:
+    name: Build (${{ matrix.arch }})
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build static Linux binary
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+
+          scratchdir="/tmp/hetzner-dyndns-build-${ARCH}"
+          binaryname="hetzner-dyndns.${ARCH}"
+
+          docker run --rm \
+            --platform "linux/${ARCH}" \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            swift:6.2.1-jammy \
+            bash -lc "rm -rf '$scratchdir' && \
+                      swift build -c release --static-swift-stdlib --jobs 1 --scratch-path '$scratchdir' && \
+                      strip '$scratchdir/release/hetzner-dyndns' && \
+                      cp '$scratchdir/release/hetzner-dyndns' '$binaryname' && \
+                      rm -rf '$scratchdir'"
+
+      - name: Verify binary
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+
+          binaryname="hetzner-dyndns.${ARCH}"
+
+          test -f "$binaryname"
+          chmod +x "$binaryname"
+          file "$binaryname"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hetzner-dyndns-${{ matrix.arch }}
+          path: hetzner-dyndns.${{ matrix.arch }}
+          if-no-files-found: error
+
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: hetzner-dyndns-*
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          sha256sum hetzner-dyndns.amd64 hetzner-dyndns.arm64 > SHA256SUMS
+
+      - name: Create or update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'gamma') }}
+          generate_release_notes: true
+          overwrite_files: true
+          files: |
+            hetzner-dyndns.amd64
+            hetzner-dyndns.arm64
+            SHA256SUMS

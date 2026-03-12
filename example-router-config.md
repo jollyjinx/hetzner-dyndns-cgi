@@ -9,8 +9,8 @@ This document provides example configurations for popular routers.
 3. Configure:
    - **Update URL**: `https://yourserver.com/cgi-bin/dyndns?hostname=<domain>&myip=<ipaddr>`
    - **Domain Name**: `mydynhost`
-   - **Username**: Your Hetzner Zone ID
-   - **Password**: Your Hetzner API Token
+   - **Username**: Your Hetzner zone name (recommended) or zone ID
+   - **Password**: Your Hetzner Console API token
 
 ## UniFi (Ubiquiti)
 
@@ -19,8 +19,8 @@ This document provides example configurations for popular routers.
 3. Configure:
    - **Service**: custom
    - **Hostname**: `mydynhost`
-   - **Username**: Your Hetzner Zone ID
-   - **Password**: Your Hetzner API Token
+   - **Username**: Your Hetzner zone name (recommended) or zone ID
+   - **Password**: Your Hetzner Console API token
    - **Server**: `yourserver.com/cgi-bin/dyndns?hostname=%h&myip=%i`
 
 ## pfSense
@@ -30,8 +30,8 @@ This document provides example configurations for popular routers.
 3. Configure:
    - **Service Type**: Custom
    - **Hostname**: `mydynhost`
-   - **Username**: Your Hetzner Zone ID
-   - **Password**: Your Hetzner API Token
+   - **Username**: Your Hetzner zone name (recommended) or zone ID
+   - **Password**: Your Hetzner Console API token
    - **Update URL**: `https://yourserver.com/cgi-bin/dyndns?hostname=%HOSTNAME%&myip=%IP%`
 
 ## DD-WRT
@@ -40,8 +40,8 @@ This document provides example configurations for popular routers.
 2. Configure:
    - **DDNS Service**: Custom
    - **DYNDNS Server**: `yourserver.com`
-   - **Username**: Your Hetzner Zone ID
-   - **Password**: Your Hetzner API Token
+   - **Username**: Your Hetzner zone name (recommended) or zone ID
+   - **Password**: Your Hetzner Console API token
    - **Hostname**: `mydynhost`
    - **URL**: `/cgi-bin/dyndns?hostname=mydynhost&myip=`
 
@@ -59,7 +59,7 @@ This document provides example configurations for popular routers.
        option enabled '1'
        option service_name 'custom'
        option domain 'mydynhost'
-       option username 'YOUR_ZONE_ID'
+       option username 'YOUR_ZONE_NAME_OR_ID'
        option password 'YOUR_API_TOKEN'
        option update_url 'https://yourserver.com/cgi-bin/dyndns?hostname=[DOMAIN]&myip=[IP]'
        option use_https '1'
@@ -74,7 +74,7 @@ This document provides example configurations for popular routers.
 
 ```
 /system script add name=dyndns-update source={
-  :local username "YOUR_ZONE_ID"
+  :local username "YOUR_ZONE_NAME_OR_ID"
   :local password "YOUR_API_TOKEN"
   :local hostname "mydynhost"
   :local url "https://yourserver.com/cgi-bin/dyndns"
@@ -96,8 +96,8 @@ This document provides example configurations for popular routers.
 3. Configure:
    - **Service Provider**: Custom
    - **Domain**: `mydynhost`
-   - **Username**: Your Hetzner Zone ID
-   - **Password**: Your Hetzner API Token
+   - **Username**: Your Hetzner zone name (recommended) or zone ID
+   - **Password**: Your Hetzner Console API token
    - **Server Address**: `yourserver.com/cgi-bin/dyndns?hostname=<domain>&myip=<ipaddr>`
 
 ## ASUS
@@ -106,8 +106,8 @@ This document provides example configurations for popular routers.
 2. Configure:
    - **Server**: Custom
    - **Host Name**: `mydynhost`
-   - **Username**: Your Hetzner Zone ID
-   - **Password**: Your Hetzner API Token
+   - **Username**: Your Hetzner zone name (recommended) or zone ID
+   - **Password**: Your Hetzner Console API token
    - **URL**: `https://yourserver.com/cgi-bin/dyndns?hostname=<domain>&myip=<ipaddr>`
 
 ## Netgear
@@ -117,8 +117,8 @@ This document provides example configurations for popular routers.
 3. Configure:
    - **Service Provider**: Custom
    - **Host Name**: `mydynhost`
-   - **Username**: Your Hetzner Zone ID
-   - **Password**: Your Hetzner API Token
+   - **Username**: Your Hetzner zone name (recommended) or zone ID
+   - **Password**: Your Hetzner Console API token
 
 Note: Netgear routers may require specific URL formats. Check your model's documentation.
 
@@ -139,4 +139,3 @@ After configuring your router, you can verify it's working by:
 - Some routers require the protocol (https://) in the URL, others don't - try both
 - Check your router's system logs for DynDNS update errors
 - Verify the URL format matches what your router expects (check documentation)
-

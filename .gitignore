@@ -7,3 +7,6 @@ DerivedData/
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
 *.xcodeproj
+hetzner-dyndns.amd64
+hetzner-dyndns.arm64
+SHA256SUMS

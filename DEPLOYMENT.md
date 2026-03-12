@@ -4,8 +4,10 @@
 
 You need to upload two files to your Hetzner web server:
 
-1. **The CGI binary**: `hetzner-dyndns` (compiled)
+1. **The CGI binary**: `hetzner-dyndns.amd64` or `hetzner-dyndns.arm64` copied to `cgi-bin/dyndns.cgi`
 2. **The .htaccess file**: `.htaccess` (configuration)
+
+The compiled binaries are not stored in git. Get them either by running `./build-linux-static.sh` locally or by downloading the release assets from GitHub Releases.
 
 ## Step-by-Step Deployment
 
@@ -15,13 +17,16 @@ You need to upload two files to your Hetzner web server:
 ./build-linux-static.sh
 ```
 
-This creates `.build/release/hetzner-dyndns`
+This creates:
+
+- `hetzner-dyndns.amd64`
+- `hetzner-dyndns.arm64`
 
 ### 2. Upload Files to Your Server
 
 ```bash
 # Upload the binary to cgi-bin directory
-scp .build/release/hetzner-dyndns user@your-server:/path/to/cgi-bin/dyndns
+scp hetzner-dyndns.amd64 user@your-server:/path/to/cgi-bin/dyndns.cgi
 
 # Upload the .htaccess file to the PARENT directory of cgi-bin
 # (This is important - .htaccess must be in the web root or parent directory)
@@ -34,7 +39,7 @@ For your Hetzner setup, it looks like:
 # DOCUMENT_ROOT=/usr/www/users/example/example.de
 # SCRIPT_FILENAME=/usr/www/users/example/example.de/cgi-bin/dyndns.cgi
 
-scp .build/release/hetzner-dyndns your-user@your-server:/usr/www/users/example/example.de/cgi-bin/dyndns
+scp hetzner-dyndns.amd64 your-user@your-server:/usr/www/users/example/example.de/cgi-bin/dyndns.cgi
 scp .htaccess your-user@your-server:/usr/www/users/example/example.de/.htaccess
 ```
 
@@ -44,7 +49,7 @@ scp .htaccess your-user@your-server:/usr/www/users/example/example.de/.htaccess
 ssh user@your-server
 
 # Make the CGI binary executable
-chmod +x /usr/www/users/example/example.de/cgi-bin/dyndns
+chmod +x /usr/www/users/example/example.de/cgi-bin/dyndns.cgi
 
 # Ensure .htaccess is readable
 chmod 644 /usr/www/users/example/example.de/.htaccess
@@ -52,7 +57,7 @@ chmod 644 /usr/www/users/example/example.de/.htaccess
 
 ### 4. Configure URL Rewriting (if needed)
 
-If your URL is `/dyndns` but the script is at `/cgi-bin/dyndns`, add this to your `.htaccess`:
+If your public URL is `/dyndns` but the script is at `/cgi-bin/dyndns.cgi`, add this to your `.htaccess`:
 
 ```apache
 # Enable rewrite engine
@@ -66,9 +71,9 @@ RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 RewriteCond %{HTTP:Authorization} ^(.*)
 RewriteRule .* - [E=REDIRECT_HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
-# Rewrite /dyndns to /cgi-bin/dyndns (if needed)
+# Rewrite /dyndns to /cgi-bin/dyndns.cgi (if needed)
 RewriteCond %{REQUEST_URI} ^/dyndns$
-RewriteRule ^dyndns$ /cgi-bin/dyndns [L,PT]
+RewriteRule ^dyndns$ /cgi-bin/dyndns.cgi [L,PT]
 ```
 
 ## Testing
@@ -77,8 +82,8 @@ After deployment, test with curl:
 
 ```bash
 # Test with valid credentials
-curl -v -u "YOUR_ZONE_ID:YOUR_API_TOKEN" \
-  "https://your-domain.com/dyndns?hostname=test.example.com&myip=1.2.3.4"
+curl -v -u "YOUR_ZONE_NAME_OR_ID:YOUR_API_TOKEN" \
+  "https://your-domain.com/cgi-bin/dyndns.cgi?hostname=test.example.com&myip=1.2.3.4"
 
 # Expected output: "good 1.2.3.4" or "nochg 1.2.3.4"
 ```
@@ -96,9 +101,10 @@ curl -v -u "YOUR_ZONE_ID:YOUR_API_TOKEN" \
 ### Issue: "500 Internal Server Error"
 
 **Causes**:
-1. Binary not executable: `chmod +x /path/to/dyndns`
-2. Wrong architecture: Make sure you built with `--platform linux/amd64`
+1. Binary not executable: `chmod +x /path/to/dyndns.cgi`
+2. Wrong architecture: Make sure you uploaded the correct `hetzner-dyndns.amd64` or `hetzner-dyndns.arm64`
 3. Check server error logs: `tail -f /path/to/error.log`
+4. Stale deployment: verify the checksum of the file in `cgi-bin/dyndns.cgi` matches the binary you just built
 
 ### Issue: "nohost - hostname not found"
 
@@ -106,11 +112,6 @@ curl -v -u "YOUR_ZONE_ID:YOUR_API_TOKEN" \
 1. The DNS record doesn't exist in your Hetzner zone
 2. The hostname doesn't match exactly (check spelling)
 3. The record type (A vs AAAA) doesn't match the IP address type
-
-**Debug**: The error message will show available records:
-```
-nohost - test.example.com (A) not found in zone. Available: [example.com (A), www.example.com (A)]
-```
 
 ### Debug Script
 
@@ -143,9 +144,8 @@ Look for `HTTP_AUTHORIZATION` or `REDIRECT_HTTP_AUTHORIZATION` in the output.
 Configure your router's DynDNS settings with:
 
 - **Server**: `your-domain.com`
-- **URL/Path**: `/dyndns?hostname=<mydnyhost>&myip=<ipaddr>`
-- **Username**: Your Hetzner Zone ID
-- **Password**: Your Hetzner API Token
+- **URL/Path**: `/cgi-bin/dyndns.cgi?hostname=<mydynhost>&myip=<ipaddr>`
+- **Username**: Your Hetzner zone name (recommended) or zone ID
+- **Password**: Your Hetzner Console API token
 
 Most routers will automatically replace `<domain>` and `<ipaddr>` with the appropriate values.
-

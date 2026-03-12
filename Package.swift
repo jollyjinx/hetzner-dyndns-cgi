@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(name: "hetzner-dyndns-cgi",
@@ -9,18 +9,14 @@ let package = Package(name: "hetzner-dyndns-cgi",
                           .executable(name: "hetzner-dyndns",
                                       targets: ["HetznerDynDNS"]),
                       ],
-                      dependencies: [
-                          .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.21.0"),
-                      ],
                       targets: [
                           .executableTarget(name: "HetznerDynDNS",
-                                            dependencies: [
-                                                .product(name: "AsyncHTTPClient", package: "async-http-client"),
-                                            ],
                                             swiftSettings: [
-                                                .enableExperimentalFeature("StrictConcurrency"),
+                                                .enableExperimentalFeature("StrictConcurrency=complete"),
                                             ],
                                             linkerSettings: [
                                                 .linkedLibrary("c", .when(platforms: [.linux])),
                                             ]),
+                          .testTarget(name: "HetznerDynDNSTests",
+                                      dependencies: ["HetznerDynDNS"]),
                       ])
