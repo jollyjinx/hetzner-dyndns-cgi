@@ -1,20 +1,62 @@
 # hetzner-dyndns-cgi
 
-A CGI binary that provides a DynDNS-compatible interface for updating Hetzner DNS records. This allows you to use consumer routers with DynDNS support to automatically update your Hetzner DNS records.
+A Swift package that provides:
+
+- a reusable `HetznerDynDNS` library for updating Hetzner DNS records with DynDNS-compatible responses
+- a `hetzner-dyndns` CGI executable for consumer routers that only speak the DynDNS protocol
 
 The CGI uses the current Hetzner Console DNS API at `https://api.hetzner.cloud/v1`, which replaces the retired `dns.hetzner.com` API.
 
 ## Features
 
 - ✅ **DynDNS Protocol Compatible** - Works with most consumer routers that support DynDNS
+- ✅ **Reusable Swift Library** - Call the same update logic directly from other Swift programs
 - ✅ **Self-Contained Linux Build** - Ships as a single Linux executable built for `amd64` or `arm64`
 - ✅ **Hetzner Console DNS API** - Direct integration with the current Hetzner DNS API
 - ✅ **IPv4 & IPv6 Support** - Automatically handles A and AAAA records
 - ✅ **Standard Responses** - Returns standard DynDNS response codes
 
+## Library Usage
+
+The package now exposes a library product named `HetznerDynDNS`.
+
+### Add the package
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/jollyjinx/hetzner-dyndns-cgi.git", from: "1.0.0"),
+],
+targets: [
+    .executableTarget(
+        name: "YourApp",
+        dependencies: [
+            .product(name: "HetznerDynDNS", package: "hetzner-dyndns-cgi"),
+        ]
+    ),
+]
+```
+
+### Call the library directly
+
+```swift
+import HetznerDynDNS
+
+let handler = DynDNSHandler()
+let request = DynDNSRequest(zoneIdentifier: "example.com",
+                            apiToken: "hetzner-api-token",
+                            hostname: "home.example.com",
+                            ipAddress: "203.0.113.10")
+
+let response = await handler.handle(request)
+print(response.status.code)
+print(response.body)
+```
+
+The response body uses the same DynDNS-style strings as the CGI binary, for example `good 203.0.113.10`, `nochg 203.0.113.10`, `badauth`, or `nohost`.
+
 ## How It Works
 
-The CGI binary accepts HTTP requests with Basic Authentication where:
+The CGI executable accepts HTTP requests with Basic Authentication where:
 - **Username** = Your Hetzner DNS zone name or zone ID
 - **Password** = Your Hetzner Console API token
 
@@ -23,7 +65,7 @@ Query parameters:
 - `myip` (or `ip`) - Optional IP address (defaults to the client's remote address)
 
 
-## Deployment
+## CGI Deployment
 
 1. **Upload to your web server's CGI directory**:
    Either build the binary from source or download the correct release asset (`hetzner-dyndns.amd64` or `hetzner-dyndns.arm64`) from GitHub Releases, then copy it to your web server's `cgi-bin` as `dyndns.cgi`.

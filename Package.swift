@@ -6,11 +6,19 @@ let package = Package(name: "hetzner-dyndns-cgi",
                           .macOS(.v13),
                       ],
                       products: [
+                          .library(name: "HetznerDynDNS",
+                                   targets: ["HetznerDynDNS"]),
                           .executable(name: "hetzner-dyndns",
-                                      targets: ["HetznerDynDNS"]),
+                                      targets: ["HetznerDynDNSCGI"]),
                       ],
                       targets: [
-                          .executableTarget(name: "HetznerDynDNS",
+                          .target(name: "HetznerDynDNS",
+                                  swiftSettings: [
+                                      .enableExperimentalFeature("StrictConcurrency=complete"),
+                                  ]),
+                          .executableTarget(name: "HetznerDynDNSCGI",
+                                            dependencies: ["HetznerDynDNS"],
+                                            path: "Sources/HetznerDynDNSCGI",
                                             swiftSettings: [
                                                 .enableExperimentalFeature("StrictConcurrency=complete"),
                                             ],
