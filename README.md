@@ -158,12 +158,21 @@ The build script uses `container run` and serializes the Swift build to keep mem
 
 ### GitHub Releases
 
-Pushing a numeric version tag such as `1.0.0` triggers GitHub Actions to run the test suite, build both Linux binaries, and attach them to a GitHub Release for that tag.
+Pushes to `main` and `development` run the test suite and build both Linux binaries in CI. Pushing a release tag triggers the same build and publishes the binaries to a GitHub Release.
 
 ```bash
 git tag 1.0.0
 git push origin 1.0.0
 ```
+
+Supported release tags follow the same conventions as the other repositories:
+
+- `1.2.3`
+- `1.2.3-beta.1`
+- `v1.2.3`
+- `v1.2.3-beta.1`
+- `beta`
+- `development`
 
 Each release publishes:
 
